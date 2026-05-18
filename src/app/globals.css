@@ -1,26 +1,62 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
+/* Design tokens — see DESIGN.md (extracted from client reference screenshots).
+   Tailwind v4 @theme: each token generates utilities, e.g. bg-brand, text-muted. */
+@theme {
+  --color-brand: #2f6bff;
+  --color-brand-hover: #1e54e6;
+
+  --color-bg: #ffffff;
+  --color-canvas: #fafafa;
+  --color-nav-active: #f4f4f5;
+
+  --color-border: #e4e4e7;
+  --color-text: #0a0a0a;
+  --color-muted: #71717a;
+  --color-faint: #a1a1aa;
+
+  --color-logo-from: #7c3aed;
+  --color-logo-to: #4f46e5;
+
+  --color-analyzed: #16a34a;
+  --color-active-bg: #dcfce7;
+  --color-active-fg: #15803d;
+  --color-version-bg: #eef2ff;
+  --color-version-fg: #4f46e5;
+  --color-plan-bg: #fefce8;
+  --color-plan-border: #fde047;
+  --color-plan-fg: #a16207;
+
+  --font-sans: var(--font-geist-sans), system-ui, sans-serif;
+  --font-mono: var(--font-geist-mono), monospace;
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+html,
+body {
+  height: 100%;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--color-canvas);
+  color: var(--color-text);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Reusable thumbnail gradients (Feed cards / channel avatars) keyed by token */
+.grad-orange   { background-image: linear-gradient(160deg, #fb923c, #ea580c); }
+.grad-sunset   { background-image: linear-gradient(160deg, #fb7185, #e11d48); }
+.grad-navy     { background-image: linear-gradient(160deg, #1e293b, #0f172a); }
+.grad-blue     { background-image: linear-gradient(160deg, #60a5fa, #2563eb); }
+.grad-pink     { background-image: linear-gradient(160deg, #f472b6, #db2777); }
+.grad-yellow   { background-image: linear-gradient(160deg, #fde047, #f59e0b); }
+.grad-green    { background-image: linear-gradient(160deg, #34d399, #059669); }
+.grad-violet   { background-image: linear-gradient(160deg, #a78bfa, #7c3aed); }
+.grad-teal     { background-image: linear-gradient(160deg, #2dd4bf, #0d9488); }
+
+/* Thin scrollbars for the kanban board */
+.scrollbar-thin::-webkit-scrollbar { height: 8px; width: 8px; }
+.scrollbar-thin::-webkit-scrollbar-thumb {
+  background: var(--color-border);
+  border-radius: 9999px;
 }
