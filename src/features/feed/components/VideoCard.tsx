@@ -13,6 +13,8 @@ export function VideoCard({
   video,
   onOpen,
   onPatch,
+  selected,
+  onToggleSelect,
 }: {
   video: Video;
   onOpen?: (v: Video) => void;
@@ -20,6 +22,10 @@ export function VideoCard({
    * appear instantly (analyze flips `isAnalyzed`, save toggles `isSaved`)
    * without waiting for a full re-stream. */
   onPatch?: (id: string, patch: Partial<Video>) => void;
+  /** When provided, the card renders a selection checkbox. Used by Feed's
+   * bulk-analyze flow; Saved page omits it. */
+  selected?: boolean;
+  onToggleSelect?: (id: string) => void;
 }) {
   const toggleSave = useToggleSave();
   const takeIdea = useTakeIdea();
@@ -92,6 +98,36 @@ export function VideoCard({
           onLight
           className="absolute right-2 top-2"
         />
+        {/* Selection checkbox — visible always when already selected, else
+            on group-hover so it doesn't clutter the default view. */}
+        {onToggleSelect && (
+          <span
+            role="checkbox"
+            aria-checked={!!selected}
+            tabIndex={0}
+            onClick={(e) => {
+              e.stopPropagation();
+              onToggleSelect(video.id);
+            }}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                e.stopPropagation();
+                onToggleSelect(video.id);
+              }
+            }}
+            className={cn(
+              "absolute left-2 top-2 grid size-6 cursor-pointer place-items-center rounded-md",
+              "border border-white/40 bg-black/40 text-white text-sm backdrop-blur transition-opacity",
+              selected
+                ? "border-brand bg-brand opacity-100"
+                : "opacity-0 group-hover:opacity-100",
+            )}
+            aria-label={selected ? "Deselect video" : "Select video"}
+          >
+            {selected ? "✓" : ""}
+          </span>
+        )}
         {!coverSrc && (
           <span className="absolute inset-x-4 top-1/2 -translate-y-1/2 text-center text-lg font-bold text-white drop-shadow">
             {video.title}

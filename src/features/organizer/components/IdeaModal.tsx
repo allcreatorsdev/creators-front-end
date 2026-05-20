@@ -5,23 +5,25 @@ import { Modal } from "@/components/ui/Modal";
 import { Input, Label, Select } from "@/components/ui/Field";
 import { Button } from "@/components/ui/Button";
 import { Spinner } from "@/components/ui/Spinner";
+import { PlatformIcon } from "@/components/ui/PlatformIcon";
+import { cn } from "@/lib/utils/cn";
 import type { Attribution, Idea, Subject } from "@/lib/api/types";
+import { TEMPLATE_LABEL, platformsFor } from "../templateMap";
 import {
+  useCreateIdea,
   useDeleteIdea,
   useGenerateScript,
   useUpdateIdea,
 } from "../hooks";
 
 const STAGES = ["idea", "writing", "editing", "ready", "published"];
-const STAGE_LABEL = (s: string) => s[0].toUpperCase() + s.slice(1);
-const FORMATS = [
-  ["short_form", "Short form"],
-  ["long_form", "Long form"],
-  ["carousel", "Carousel"],
-  ["tweet", "Tweet"],
-  ["newsletter", "Newsletter"],
-] as const;
-const PLATFORMS = ["instagram", "tiktok", "youtube"];
+const STAGE_LABEL = (s: string): string =>
+  s[0].toUpperCase() + s.slice(1);
+
+/** Sentinel id used by the organizer page to signal "this is a draft, not
+ * a saved idea yet" — the modal switches to create-on-Done mode in that
+ * case. */
+const NEW_IDEA_ID = "__new__";
 
 function Area({
   label,
@@ -45,6 +47,29 @@ function Area({
   );
 }
 
+/** A single row of the property list (Creation date / Status / Subject /
+ * …). Matches the layout in the client's PDF: icon column, label column,
+ * value column — all aligned. */
+function Property({
+  icon,
+  label,
+  children,
+}: {
+  icon: string;
+  label: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="flex items-center gap-3 py-1.5">
+      <div className="flex w-44 shrink-0 items-center gap-2 text-sm text-muted">
+        <span className="w-4 text-center text-base">{icon}</span>
+        <span>{label}</span>
+      </div>
+      <div className="min-w-0 flex-1">{children}</div>
+    </div>
+  );
+}
+
 export function IdeaModal({
   idea,
   subjects,
@@ -57,57 +82,81 @@ export function IdeaModal({
   onClose: () => void;
 }) {
   const update = useUpdateIdea();
+  const create = useCreateIdea();
   const del = useDeleteIdea();
   const genScript = useGenerateScript();
+
+  const isDraft = idea?.id === NEW_IDEA_ID;
+
+  // Drafts are edited entirely locally; only persisted on "Done". Saved
+  // ideas stream each field change to the backend immediately (legacy
+  // behaviour preserved so the kanban stays in sync).
+  const [draft, setDraft] = useState<Idea | null>(idea);
   const [content, setContent] = useState<Record<string, string>>({});
-  // Stage is staged locally and only persisted on "Done" / "Move to next
-  // stage" — picking it from the dropdown no longer instantly moves the card.
-  const [stage, setStage] = useState<string>("idea");
   const [committing, setCommitting] = useState(false);
-  const [pendingPlatform, setPendingPlatform] = useState<string | null>(null);
 
   useEffect(() => {
-    if (idea) {
-      setContent((idea.content as Record<string, string>) ?? {});
-      setStage(idea.stage);
-    }
+    setDraft(idea);
+    setContent(idea ? ((idea.content as Record<string, string>) ?? {}) : {});
   }, [idea]);
 
-  if (!idea) return null;
+  if (!idea || !draft) return null;
 
-  const patch = (p: Record<string, unknown>) =>
-    update.mutate({ id: idea.id, patch: p });
+  /** For saved ideas, immediately PATCH the field; for drafts, just keep
+   * the change local until Done. Same call site either way. */
+  const setField = <K extends keyof Idea>(key: K, value: Idea[K]): void => {
+    setDraft((d) => (d ? { ...d, [key]: value } : d));
+    if (!isDraft) {
+      update.mutate({ id: idea.id, patch: { [key]: value } });
+    }
+  };
 
-  const saveContent = (next: Record<string, string>) => {
+  const saveContent = (next: Record<string, string>): void => {
     setContent(next);
-    patch({ content: next });
+    if (!isDraft) update.mutate({ id: idea.id, patch: { content: next } });
   };
 
-  const togglePlatform = (p: string) => {
-    const has = idea.platforms.includes(p);
-    setPendingPlatform(p);
-    update.mutate(
-      {
-        id: idea.id,
-        patch: {
-          platforms: has
-            ? idea.platforms.filter((x) => x !== p)
-            : [...idea.platforms, p],
+  /** "Done" flow:
+   *  - draft → POST create, then close
+   *  - saved → PATCH stage if changed, then close
+   *  - stage unchanged on a saved idea → just close (no-op)
+   *
+   * Accepts an optional `targetStage` — passed by the "Move to next stage"
+   * button so we don't depend on `draft.stage` which would still be the
+   * old value due to React state-update batching at click time. */
+  const finish = (targetStage?: string): void => {
+    const stage = targetStage ?? draft.stage;
+    if (isDraft) {
+      if (!draft.title.trim()) {
+        return;
+      }
+      setCommitting(true);
+      create.mutate(
+        {
+          title: draft.title,
+          stage,
+          subjectId: draft.subject?.id,
+          attributionId: draft.attribution?.id,
+          fmt: draft.fmt,
+          platforms: [],
+        } as Parameters<typeof create.mutate>[0],
+        {
+          onSuccess: () => {
+            setCommitting(false);
+            onClose();
+          },
+          onError: () => setCommitting(false),
         },
-      },
-      { onSettled: () => setPendingPlatform(null) },
-    );
-  };
-
-  // Persist the chosen stage, show a spinner while it transfers, then close.
-  const commitStage = (target: string) => {
-    if (target === idea.stage) {
+      );
+      return;
+    }
+    if (stage === idea.stage) {
       onClose();
       return;
     }
     setCommitting(true);
     update.mutate(
-      { id: idea.id, patch: { stage: target } },
+      { id: idea.id, patch: { stage } },
       {
         onSuccess: () => {
           setCommitting(false);
@@ -118,22 +167,39 @@ export function IdeaModal({
     );
   };
 
-  const stageIdx = STAGES.indexOf(stage);
+  const stageIdx = STAGES.indexOf(draft.stage);
   const nextStage =
     stageIdx >= 0 && stageIdx < STAGES.length - 1
       ? STAGES[stageIdx + 1]
       : null;
-  const busy = committing || update.isPending;
+  const busy = committing || update.isPending || create.isPending;
+  const platforms = platformsFor(draft.fmt, draft.platforms);
+
+  const created = draft.createdAt
+    ? new Date(draft.createdAt).toLocaleString(undefined, {
+        dateStyle: "long",
+        timeStyle: "short",
+      })
+    : isDraft
+      ? "—"
+      : "—";
 
   return (
     <Modal open={!!idea} onClose={onClose}>
-      <div className="flex items-start justify-between gap-4 border-b border-border p-5">
+      <div className="flex items-start justify-between gap-4 p-5">
         <input
-          defaultValue={idea.title}
-          onBlur={(e) =>
-            e.target.value !== idea.title && patch({ title: e.target.value })
-          }
-          className="w-full bg-transparent text-lg font-semibold outline-none"
+          autoFocus={isDraft}
+          value={draft.title}
+          placeholder="Untitled"
+          onChange={(e) => setField("title", e.target.value)}
+          onBlur={(e) => {
+            // Persist titles on saved ideas only when they actually change
+            // (the controlled `setField` already handles drafts).
+            if (!isDraft && e.target.value !== idea.title) {
+              update.mutate({ id: idea.id, patch: { title: e.target.value } });
+            }
+          }}
+          className="w-full bg-transparent text-2xl font-semibold outline-none placeholder:text-faint"
         />
         <button
           onClick={onClose}
@@ -144,13 +210,41 @@ export function IdeaModal({
         </button>
       </div>
 
-      <div className="max-h-[70vh] space-y-4 overflow-y-auto p-5">
-        <div className="grid grid-cols-2 gap-4">
-          <div className="space-y-1">
-            <Label>Stage</Label>
+      <div className="max-h-[70vh] space-y-5 overflow-y-auto px-5 pb-5">
+        {/* Property list — mirrors the layout in the client's spec PDF.
+            Each row: icon, label, editable value. */}
+        <div className="divide-y divide-border border-y border-border">
+          <Property icon="⊕" label="Creation date">
+            <span className="text-sm text-text">{created}</span>
+          </Property>
+
+          {/* "Inspired by" is hidden unless the idea was started from an
+              analyzed video via the Take-idea flow. */}
+          {draft.sourceVideo && (
+            <Property icon="↗" label="Inspired by">
+              <a
+                href={draft.sourceVideo.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex min-w-0 items-center gap-2 text-sm text-brand hover:underline"
+              >
+                <PlatformIcon
+                  platform={draft.sourceVideo.platform}
+                  size={14}
+                />
+                <span className="truncate">{draft.sourceVideo.title}</span>
+                <span className="text-faint">@{draft.sourceVideo.username}</span>
+              </a>
+            </Property>
+          )}
+
+          <Property icon="●" label="Status">
             <Select
-              value={stage}
-              onChange={(e) => setStage(e.target.value)}
+              value={draft.stage}
+              onChange={(e) =>
+                setField("stage", e.target.value as Idea["stage"])
+              }
+              className="w-48 py-1"
             >
               {STAGES.map((s) => (
                 <option key={s} value={s}>
@@ -158,35 +252,21 @@ export function IdeaModal({
                 </option>
               ))}
             </Select>
-            {stage !== idea.stage && (
-              <p className="text-xs text-brand">
-                Will move to “{STAGE_LABEL(stage)}” when you click Done.
-              </p>
+            {!isDraft && draft.stage !== idea.stage && (
+              <span className="ml-2 text-xs text-brand">
+                (moves on Done)
+              </span>
             )}
-          </div>
-          <div className="space-y-1">
-            <Label>Subject</Label>
+          </Property>
+
+          <Property icon="◎" label="Attribution">
             <Select
-              defaultValue={idea.subject?.id ?? ""}
-              onChange={(e) =>
-                patch({ subjectId: e.target.value || null })
-              }
-            >
-              <option value="">— None —</option>
-              {subjects.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.name}
-                </option>
-              ))}
-            </Select>
-          </div>
-          <div className="space-y-1">
-            <Label>Attribution</Label>
-            <Select
-              defaultValue={idea.attribution?.id ?? ""}
-              onChange={(e) =>
-                patch({ attributionId: e.target.value || null })
-              }
+              value={draft.attribution?.id ?? ""}
+              onChange={(e) => {
+                const next = attributions.find((a) => a.id === e.target.value);
+                setField("attribution", next ?? null);
+              }}
+              className="w-64 py-1"
             >
               <option value="">— None —</option>
               {attributions.map((a) => (
@@ -195,166 +275,209 @@ export function IdeaModal({
                 </option>
               ))}
             </Select>
-          </div>
-          <div className="space-y-1">
-            <Label>Publication date</Label>
+          </Property>
+
+          <Property icon="☰" label="Subject">
+            <Select
+              value={draft.subject?.id ?? ""}
+              onChange={(e) => {
+                const next = subjects.find((s) => s.id === e.target.value);
+                setField("subject", next ?? null);
+              }}
+              className="w-64 py-1"
+            >
+              <option value="">Choose one subject</option>
+              {subjects.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.name}
+                </option>
+              ))}
+            </Select>
+          </Property>
+
+          <Property icon="📅" label="Publication date">
             <Input
               type="date"
-              defaultValue={idea.publicationDate ?? ""}
+              value={draft.publicationDate ?? ""}
               onChange={(e) =>
-                patch({ publicationDate: e.target.value || null })
+                setField("publicationDate", e.target.value || null)
               }
+              className="w-48 py-1"
             />
-          </div>
-        </div>
+          </Property>
 
-        <div className="space-y-1">
-          <Label>Platform</Label>
-          <div className="flex gap-2">
-            {PLATFORMS.map((p) => {
-              const active = idea.platforms.includes(p);
-              const loading = pendingPlatform === p;
-              return (
-                <button
-                  key={p}
-                  onClick={() => togglePlatform(p)}
-                  disabled={!!pendingPlatform}
-                  className={`flex items-center gap-1.5 rounded-md px-3 py-1 text-xs font-medium disabled:opacity-60 ${
-                    active
-                      ? "bg-version-bg text-version-fg"
-                      : "border border-border text-muted"
-                  }`}
-                >
-                  {loading && <Spinner className="size-3" />}
-                  {p}
-                </button>
-              );
-            })}
-          </div>
-        </div>
+          <Property icon="☰" label="Template">
+            <Select
+              value={draft.fmt}
+              onChange={(e) =>
+                setField("fmt", e.target.value as Idea["fmt"])
+              }
+              className="w-64 py-1"
+            >
+              {(
+                ["short_form", "long_form", "carousel", "tweet", "newsletter"] as const
+              ).map((f) => (
+                <option key={f} value={f}>
+                  {TEMPLATE_LABEL[f]}
+                </option>
+              ))}
+            </Select>
+          </Property>
 
-        <div className="space-y-1">
-          <Label>Format</Label>
-          <Select
-            defaultValue={idea.fmt}
-            onChange={(e) => patch({ fmt: e.target.value })}
-          >
-            {FORMATS.map(([v, l]) => (
-              <option key={v} value={v}>
-                {l}
-              </option>
-            ))}
-          </Select>
-        </div>
-
-        <div className="border-t border-border pt-4">
-          {(idea.fmt === "short_form" || idea.fmt === "long_form") && (
-            <div className="space-y-3">
-              <div className="flex justify-end">
-                <Button
-                  variant="secondary"
-                  onClick={() =>
-                    genScript.mutate(idea.id, {
-                      onSuccess: (data) =>
-                        setContent(
-                          (data.content as Record<string, string>) ?? {},
-                        ),
-                    })
-                  }
-                  disabled={genScript.isPending}
-                >
-                  {genScript.isPending ? (
-                    <>
-                      <Spinner className="size-4" /> Generating…
-                    </>
-                  ) : (
-                    "✨ Generate script"
-                  )}
-                </Button>
+          {/* Platforms are derived from the template choice — shown here
+              as read-only badges so the user knows where the idea will
+              ship. The client spec explicitly says NOT to expose this as
+              an editable field. */}
+          {platforms.length > 0 && (
+            <Property icon="🌐" label="Will publish to">
+              <div className="flex flex-wrap items-center gap-2">
+                {platforms.map((p) => (
+                  <span
+                    key={p}
+                    className="inline-flex items-center gap-1 rounded-md bg-nav-active px-2 py-0.5 text-xs font-medium text-muted"
+                  >
+                    {(p === "instagram" ||
+                      p === "tiktok" ||
+                      p === "youtube") && (
+                      <PlatformIcon platform={p} size={12} />
+                    )}
+                    {p}
+                  </span>
+                ))}
               </div>
-              <Area
-                label="Hook"
-                value={content.hook ?? ""}
-                onChange={(v) => saveContent({ ...content, hook: v })}
-              />
-              <Area
-                label="Observation"
-                value={content.observation ?? ""}
-                onChange={(v) =>
-                  saveContent({ ...content, observation: v })
-                }
-              />
-              <Area
-                label="Payoff"
-                value={content.payoff ?? ""}
-                onChange={(v) => saveContent({ ...content, payoff: v })}
-              />
-            </div>
+            </Property>
           )}
-          {idea.fmt === "carousel" && (
-            <Area
-              label="Carousel pages (one per line)"
-              value={content.pages ?? ""}
-              onChange={(v) => saveContent({ ...content, pages: v })}
-            />
-          )}
-          {idea.fmt === "tweet" && (
-            <Area
-              label="Tweet"
-              value={content.text ?? ""}
-              onChange={(v) => saveContent({ ...content, text: v })}
-            />
-          )}
-          {idea.fmt === "newsletter" && (
-            <div className="space-y-3">
-              <div className="space-y-1">
-                <Label>Subject line</Label>
-                <Input
-                  defaultValue={content.subjectLine ?? ""}
-                  onBlur={(e) =>
-                    saveContent({ ...content, subjectLine: e.target.value })
+        </div>
+
+        {/* Script / content editing — hidden for drafts (you can't generate
+            a script from an unsaved idea). Once created, re-opening shows
+            the editor. */}
+        {!isDraft && (
+          <div className="space-y-3 pt-2">
+            {(draft.fmt === "short_form" || draft.fmt === "long_form") && (
+              <div className="space-y-3">
+                <div className="flex justify-end">
+                  <Button
+                    variant="secondary"
+                    onClick={() =>
+                      genScript.mutate(idea.id, {
+                        onSuccess: (data) =>
+                          setContent(
+                            (data.content as Record<string, string>) ?? {},
+                          ),
+                      })
+                    }
+                    disabled={genScript.isPending}
+                  >
+                    {genScript.isPending ? (
+                      <>
+                        <Spinner className="size-4" /> Generating…
+                      </>
+                    ) : (
+                      "✨ Generate script"
+                    )}
+                  </Button>
+                </div>
+                <Area
+                  label="Hook"
+                  value={content.hook ?? ""}
+                  onChange={(v) => saveContent({ ...content, hook: v })}
+                />
+                <Area
+                  label="Observation"
+                  value={content.observation ?? ""}
+                  onChange={(v) =>
+                    saveContent({ ...content, observation: v })
                   }
                 />
+                <Area
+                  label="Payoff"
+                  value={content.payoff ?? ""}
+                  onChange={(v) => saveContent({ ...content, payoff: v })}
+                />
               </div>
+            )}
+            {draft.fmt === "carousel" && (
               <Area
-                label="Body"
-                value={content.body ?? ""}
-                onChange={(v) => saveContent({ ...content, body: v })}
+                label="Carousel pages (one per line)"
+                value={content.pages ?? ""}
+                onChange={(v) => saveContent({ ...content, pages: v })}
               />
-            </div>
-          )}
-        </div>
+            )}
+            {draft.fmt === "tweet" && (
+              <Area
+                label="Thread / post"
+                value={content.text ?? ""}
+                onChange={(v) => saveContent({ ...content, text: v })}
+              />
+            )}
+            {draft.fmt === "newsletter" && (
+              <div className="space-y-3">
+                <div className="space-y-1">
+                  <Label>Subject line</Label>
+                  <Input
+                    defaultValue={content.subjectLine ?? ""}
+                    onBlur={(e) =>
+                      saveContent({ ...content, subjectLine: e.target.value })
+                    }
+                  />
+                </div>
+                <Area
+                  label="Body"
+                  value={content.body ?? ""}
+                  onChange={(v) => saveContent({ ...content, body: v })}
+                />
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       <div className="flex items-center justify-between border-t border-border p-4">
-        <Button
-          variant="danger"
-          disabled={busy}
-          onClick={() => {
-            del.mutate(idea.id);
-            onClose();
-          }}
-        >
-          Delete
-        </Button>
+        {isDraft ? (
+          <span className="text-xs text-faint">
+            New idea — click Done to create.
+          </span>
+        ) : (
+          <Button
+            variant="danger"
+            disabled={busy}
+            onClick={() => {
+              del.mutate(idea.id);
+              onClose();
+            }}
+          >
+            Delete
+          </Button>
+        )}
         <div className="flex items-center gap-2">
-          {nextStage && (
+          {!isDraft && nextStage && (
             <Button
               variant="secondary"
               disabled={busy}
-              onClick={() => {
-                setStage(nextStage);
-                commitStage(nextStage);
-              }}
+              onClick={() => finish(nextStage)}
+              className={cn(busy && "cursor-wait")}
             >
-              Move to “{STAGE_LABEL(nextStage)}” →
+              {busy ? (
+                <>
+                  <Spinner className="size-4" /> Moving…
+                </>
+              ) : (
+                <>Move to “{STAGE_LABEL(nextStage)}” →</>
+              )}
             </Button>
           )}
-          <Button disabled={busy} onClick={() => commitStage(stage)}>
+          <Button
+            disabled={busy || (isDraft && !draft.title.trim())}
+            onClick={() => finish()}
+            className={cn(busy && "cursor-wait")}
+          >
             {busy ? (
               <>
-                <Spinner className="size-4" /> Saving…
+                <Spinner className="size-4" /> {isDraft ? "Creating…" : "Saving…"}
               </>
+            ) : isDraft ? (
+              "Create idea"
             ) : (
               "Done"
             )}

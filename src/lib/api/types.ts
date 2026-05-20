@@ -128,6 +128,14 @@ export interface Attribution {
   handle: string;
 }
 
+export interface IdeaSourceVideo {
+  id: string;
+  platform: Platform;
+  title: string;
+  username: string;
+  url: string;
+}
+
 export interface Idea {
   id: string;
   title: string;
@@ -138,6 +146,12 @@ export interface Idea {
   content: Record<string, unknown>;
   subject: Subject | null;
   attribution: Attribution | null;
+  /** When the idea was first created — drives the "Creation date" row of
+   * the redesigned modal. */
+  createdAt?: string;
+  /** Set when the idea was started from an analyzed video via "Take idea".
+   * Surfaces as the "Inspired by" row in the modal — hidden when null. */
+  sourceVideo?: IdeaSourceVideo | null;
 }
 
 export interface BoardColumn {

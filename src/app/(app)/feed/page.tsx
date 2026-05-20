@@ -9,7 +9,7 @@ import { Select } from "@/components/ui/Field";
 import { FilterPanel } from "@/features/feed/components/FilterPanel";
 import { VideoCard } from "@/features/feed/components/VideoCard";
 import { AnalyzedVideoModal } from "@/features/feed/components/AnalyzedVideoModal";
-import { useAddVideoUrl, type FeedQuery } from "@/features/feed/hooks";
+import { useAddVideoUrl, useAnalyze, type FeedQuery } from "@/features/feed/hooks";
 import { useStreamFeed } from "@/features/feed/useStreamFeed";
 import { useChannels } from "@/features/channels/hooks";
 import { useMe } from "@/features/auth/hooks";
@@ -34,10 +34,20 @@ export default function FeedPage() {
   const [filters, setFilters] = useState<FeedQuery>(DEFAULTS);
   const [showFilters, setShowFilters] = useState(true);
   const [selected, setSelected] = useState<Video | null>(null);
+  // Set of video IDs the user has selected for bulk operations. Empty by
+  // default; checkboxes only become visible on hover, so the default view
+  // is unchanged for users who never bulk-analyze.
+  const [picked, setPicked] = useState<Set<string>>(new Set());
+  // Progress counter shown on the Bulk Analyze button while it iterates.
+  const [bulkProgress, setBulkProgress] = useState<{
+    done: number;
+    total: number;
+  } | null>(null);
 
   // Debounce so rapid filter tweaks collapse into one backend request.
   const debouncedFilters = useDebouncedValue(filters, 220);
   const addUrl = useAddVideoUrl();
+  const analyze = useAnalyze();
   const { data: me } = useMe();
   const { data: channels } = useChannels();
   const qc = useQueryClient();
@@ -75,21 +85,68 @@ export default function FeedPage() {
     items,
     total,
     expected,
-    hasNext,
     isStreaming,
+    isLoadingMore,
     isInitialLoad,
     error,
     patchItem,
+    prependItem,
+    loadMore,
   } = useStreamFeed(debouncedFilters, refreshTick);
 
   const filteredChannel = channels?.find((c) => c.id === filters.channelId);
   const channelScraping = !!filteredChannel?.scraping;
 
-  // How many skeleton slots to show after the real cards. We aim for the
-  // page-size advertised by the meta chunk; before meta arrives we use
-  // pageSize as a sensible default.
+  const togglePick = (id: string): void => {
+    setPicked((s) => {
+      const next = new Set(s);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  /** Run analyze sequentially across selected videos that aren't already
+   * analyzed. Sequential (not parallel) keeps the Anthropic spend
+   * predictable and avoids racing the credit charge logic. */
+  const runBulkAnalyze = async (): Promise<void> => {
+    const toAnalyze = items.filter(
+      (v) => picked.has(v.id) && !v.isAnalyzed,
+    );
+    if (toAnalyze.length === 0) return;
+    setBulkProgress({ done: 0, total: toAnalyze.length });
+    for (let i = 0; i < toAnalyze.length; i++) {
+      const v = toAnalyze[i];
+      try {
+        const updated = await analyze.mutateAsync(v.id);
+        patchItem(v.id, updated);
+      } catch {
+        // Surface the failure as a console warning but keep going — one
+        // bad video shouldn't abort the whole batch.
+        // eslint-disable-next-line no-console
+        console.warn("Bulk analyze failed for video", v.id);
+      }
+      setBulkProgress({ done: i + 1, total: toAnalyze.length });
+    }
+    setBulkProgress(null);
+    setPicked(new Set());
+  };
+
+  // Counts shown on the bulk action button. Already-analyzed videos in
+  // the selection are skipped silently — the user usually doesn't want
+  // to spend credits re-analyzing those.
+  const pickedAnalyzable = items.filter(
+    (v) => picked.has(v.id) && !v.isAnalyzed,
+  ).length;
+
+  // Skeleton slots are only shown while page 1 is streaming (filling the
+  // initial grid). Load-more keeps the existing cards visible and surfaces
+  // progress through the button spinner instead — adding skeletons there
+  // would shift the grid layout each time a new card lands.
   const target = expected ?? filters.pageSize ?? 24;
-  const skeletonCount = isStreaming ? Math.max(0, target - items.length) : 0;
+  const skeletonCount = isStreaming
+    ? Math.max(0, target - items.length)
+    : 0;
 
   return (
     <div className="space-y-5">
@@ -101,13 +158,56 @@ export default function FeedPage() {
           <button
             onClick={() => {
               const url = window.prompt("Paste a video URL");
-              if (url) addUrl.mutate(url);
+              if (!url) return;
+              addUrl.mutate(url, {
+                onSuccess: (video) => {
+                  // Drop the imported video at the TOP of the grid
+                  // without re-streaming the whole feed. Refetching
+                  // would wipe scroll position + visible state, and
+                  // for old YouTube URLs the real `posted_at` puts
+                  // the video deep in the recency sort — user would
+                  // think the import silently failed.
+                  prependItem(video);
+                },
+                onError: (err) => {
+                  window.alert(
+                    `Couldn't import that URL: ${(err as Error).message}`,
+                  );
+                },
+              });
             }}
             disabled={addUrl.isPending}
             className="hover:text-text disabled:opacity-50"
           >
             {addUrl.isPending ? "Adding…" : "🔗 Add video URL"}
           </button>
+          {/* Bulk Analyze — visible when at least one card is selected.
+              Disabled when no analyzable videos in the selection (e.g.
+              all are already analyzed). */}
+          {picked.size > 0 && (
+            <button
+              onClick={runBulkAnalyze}
+              disabled={pickedAnalyzable === 0 || bulkProgress !== null}
+              className="inline-flex items-center gap-1.5 rounded-md bg-brand px-3 py-1 text-xs font-medium text-white hover:bg-brand-hover disabled:opacity-50"
+            >
+              {bulkProgress ? (
+                <>
+                  <Spinner className="size-3" />
+                  Analyzing {bulkProgress.done}/{bulkProgress.total}…
+                </>
+              ) : (
+                <>⚡ Bulk Analyze ({pickedAnalyzable})</>
+              )}
+            </button>
+          )}
+          {picked.size > 0 && !bulkProgress && (
+            <button
+              onClick={() => setPicked(new Set())}
+              className="text-xs text-faint hover:text-text"
+            >
+              Clear selection
+            </button>
+          )}
         </div>
         <div className="flex items-center gap-3">
           <button
@@ -192,6 +292,8 @@ export default function FeedPage() {
                     video={v}
                     onOpen={setSelected}
                     onPatch={patchItem}
+                    selected={picked.has(v.id)}
+                    onToggleSelect={togglePick}
                   />
                 ))}
                 {/* Skeleton placeholders for the slots still en route. */}
@@ -208,18 +310,21 @@ export default function FeedPage() {
                 </p>
               )}
 
-              {hasNext && !isStreaming && (
+              {/* Keep "Load more" visible as long as fewer items have
+                  arrived than the total — the backend `hasNext` flag is
+                  only a hint and can flip to false a few pages early
+                  when per-platform pagination interleaves uneven
+                  platform sizes. items.length < total is the source of
+                  truth for "is there still more to fetch?". */}
+              {total !== null && items.length < total && !isStreaming && (
                 <div className="mt-6 text-center">
                   <button
-                    onClick={() =>
-                      setFilters({
-                        ...filters,
-                        page: (filters.page ?? 1) + 1,
-                      })
-                    }
-                    className="inline-flex items-center gap-2 rounded-lg border border-border px-4 py-2 text-sm font-medium hover:bg-nav-active"
+                    onClick={loadMore}
+                    disabled={isLoadingMore}
+                    className="inline-flex items-center gap-2 rounded-lg border border-border px-4 py-2 text-sm font-medium hover:bg-nav-active disabled:opacity-50"
                   >
-                    Load more
+                    {isLoadingMore && <Spinner className="size-4" />}
+                    {isLoadingMore ? "Loading…" : "Load more"}
                   </button>
                 </div>
               )}
