@@ -7,7 +7,7 @@ import {
 } from "@tanstack/react-query";
 import { api } from "@/lib/api/client";
 import { qk } from "@/lib/query/keys";
-import type { Channel, ChannelSuggestion } from "@/lib/api/types";
+import type { Channel, ChannelCategory } from "@/lib/api/types";
 
 export function useChannels() {
   return useQuery({
@@ -41,7 +41,7 @@ export function useDescribeChannels() {
       platform?: string;
       accountSize?: string;
     }) =>
-      api<ChannelSuggestion[]>("/channels/describe", {
+      api<ChannelCategory[]>("/channels/describe", {
         method: "POST",
         body,
       }),

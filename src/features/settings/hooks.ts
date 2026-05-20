@@ -105,3 +105,24 @@ export function useConfirmCheckout() {
     },
   });
 }
+
+/** Opens the Stripe Billing Portal — users update card / view invoices /
+ * cancel subscription there. Stripe owns the cancel UX so we don't have
+ * to build it ourselves. The `from=portal` marker on the return URL lets
+ * the settings page know to re-fetch subscription state (in case the user
+ * cancelled / reactivated / updated their card). */
+export function useBillingPortal() {
+  return useMutation({
+    mutationFn: () => {
+      const returnUrl =
+        `${window.location.origin}/settings?tab=Subscription&from=portal`;
+      return api<{ url: string }>("/billing/portal", {
+        method: "POST",
+        body: { returnUrl },
+      });
+    },
+    onSuccess: (d) => {
+      if (d.url) window.location.href = d.url;
+    },
+  });
+}

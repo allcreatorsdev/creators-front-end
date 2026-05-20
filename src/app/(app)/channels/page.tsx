@@ -6,6 +6,7 @@ import { Input, Select } from "@/components/ui/Field";
 import { Button } from "@/components/ui/Button";
 import { Spinner } from "@/components/ui/Spinner";
 import { Skeleton } from "@/components/ui/Skeleton";
+import { PlatformIcon } from "@/components/ui/PlatformIcon";
 import { cn } from "@/lib/utils/cn";
 import { compactNumber } from "@/lib/utils/format";
 import {
@@ -18,11 +19,6 @@ import {
 
 const TABS = ["Describe", "Add by URL"] as const;
 type Tab = (typeof TABS)[number];
-const BADGE: Record<string, string> = {
-  instagram: "IG",
-  tiktok: "TT",
-  youtube: "YT",
-};
 
 /** Detect platform + handle from a pasted profile URL (or a bare handle). */
 function parseChannelUrl(
@@ -171,77 +167,104 @@ export default function ChannelsPage() {
               </Button>
             </div>
             <p className="text-xs text-faint">
-              Keyword search works on all platforms. YouTube is instant;
-              Instagram/TikTok search is live via Apify so it can take
-              ~15–40s. Click Add to pull a channel&apos;s real videos into
+              AI suggests real creators grouped by theme — fast (~3s). Click
+              Add (or “Add all”) to pull a channel&apos;s real videos into
               your feed.
             </p>
 
             {describe.isPending ? (
-              <div className="space-y-2">
-                {[0, 1, 2].map((i) => (
-                  <Skeleton key={i} className="h-14 w-full rounded-xl" />
+              <div className="space-y-6">
+                {[0, 1].map((g) => (
+                  <div key={g} className="space-y-2">
+                    <Skeleton className="h-3 w-40" />
+                    <div className="grid gap-2 sm:grid-cols-2">
+                      {[0, 1, 2, 3].map((i) => (
+                        <Skeleton key={i} className="h-14 rounded-xl" />
+                      ))}
+                    </div>
+                  </div>
                 ))}
               </div>
             ) : describe.data && describe.data.length > 0 ? (
-              <div className="space-y-2">
-                {describe.data.map((c, i) => {
-                  const added = channels.some(
-                    (w) => w.platform === c.platform && w.handle === c.handle,
-                  );
-                  return (
-                    <Card
-                      key={`${c.platform}:${c.handle}:${i}`}
-                      className="flex items-center justify-between gap-3 p-3"
-                    >
-                      <div className="flex min-w-0 items-center gap-2">
-                        <span className="rounded bg-nav-active px-1.5 py-0.5 text-[10px] font-bold text-muted">
-                          {BADGE[c.platform]}
-                        </span>
-                        <span className="min-w-0 truncate text-sm font-medium">
-                          {c.displayName}
-                          {c.resolved ? (
-                            <span className="text-muted">
-                              {" "}
-                              · {compactNumber(c.followers)} followers
-                            </span>
-                          ) : (
-                            <span className="text-faint">
-                              {" "}
-                              · stats fetched after you add
-                            </span>
-                          )}
-                        </span>
-                      </div>
-                      <Button
-                        variant="secondary"
-                        disabled={addChannel.isPending || added}
+              <div className="space-y-6">
+                {describe.data.map((cat) => (
+                  <div key={cat.name} className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <p className="text-xs font-semibold uppercase tracking-wider text-faint">
+                        {cat.name}
+                      </p>
+                      <button
                         onClick={() =>
-                          addChannel.mutate({
-                            platform: c.platform,
-                            handle: c.handle,
+                          cat.channels.forEach((c) => {
+                            const already = channels.some(
+                              (w) =>
+                                w.platform === c.platform &&
+                                w.handle === c.handle,
+                            );
+                            if (!already)
+                              addChannel.mutate({
+                                platform: c.platform,
+                                handle: c.handle,
+                              });
                           })
                         }
+                        disabled={addChannel.isPending}
+                        className="text-xs font-medium text-brand hover:underline disabled:opacity-50"
                       >
-                        {added
-                          ? "✓ Added"
-                          : addChannel.isPending
-                            ? "Adding…"
-                            : "Add"}
-                      </Button>
-                    </Card>
-                  );
-                })}
+                        Add all
+                      </button>
+                    </div>
+                    <div className="grid gap-2 sm:grid-cols-2">
+                      {cat.channels.map((c, i) => {
+                        const added = channels.some(
+                          (w) =>
+                            w.platform === c.platform &&
+                            w.handle === c.handle,
+                        );
+                        return (
+                          <Card
+                            key={`${c.platform}:${c.handle}:${i}`}
+                            className="flex items-center justify-between gap-3 p-3"
+                          >
+                            <div className="flex min-w-0 items-center gap-2">
+                              <PlatformIcon platform={c.platform} size={18} />
+                              <div className="min-w-0">
+                                <p className="truncate text-sm font-medium">
+                                  {c.displayName}
+                                </p>
+                                <p className="truncate text-xs text-muted">
+                                  {compactNumber(c.followers)} followers ·{" "}
+                                  {compactNumber(c.totalViews)} views
+                                </p>
+                              </div>
+                            </div>
+                            <Button
+                              variant="secondary"
+                              disabled={addChannel.isPending || added}
+                              onClick={() =>
+                                addChannel.mutate({
+                                  platform: c.platform,
+                                  handle: c.handle,
+                                })
+                              }
+                            >
+                              {added ? "✓ Added" : "Add"}
+                            </Button>
+                          </Card>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ))}
               </div>
             ) : describe.data ? (
               <p className="py-16 text-center text-sm text-muted">
-                No channels found for “{query}”. Try different keywords or an
-                exact @handle.
+                No creators found for “{query}”. Try different keywords.
               </p>
             ) : (
               <p className="py-16 text-center text-sm text-muted">
-                Search any platform by keyword or @handle, then Add the ones
-                you want.
+                Describe what you&apos;re looking for (e.g. “cooking”,
+                “motivation”) and press Search.
               </p>
             )}
           </div>
@@ -303,9 +326,12 @@ export default function ChannelsPage() {
                   `grad-${c.avatarGradient}`,
                 )}
               >
-                <span className="absolute -bottom-1 -right-1 rounded bg-white px-1 text-[9px] font-bold text-text shadow">
-                  {BADGE[c.platform]}
-                </span>
+                <PlatformIcon
+                  platform={c.platform}
+                  size={12}
+                  onLight
+                  className="absolute -bottom-1 -right-1"
+                />
               </div>
               <div className="min-w-0 flex-1">
                 <p className="truncate text-sm font-medium">{c.handle}</p>

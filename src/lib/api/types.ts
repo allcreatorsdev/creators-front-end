@@ -75,6 +75,7 @@ export interface Video {
   postedAt: string | null;
   coverGradient: string;
   coverUrl: string | null;
+  hasThumb: boolean;
   isAnalyzed: boolean;
   isSaved: boolean;
   analysis: VideoAnalysis | null;
@@ -109,6 +110,11 @@ export interface ChannelSuggestion {
   followers: number;
   totalViews: number;
   resolved: boolean;
+}
+
+export interface ChannelCategory {
+  name: string;
+  channels: ChannelSuggestion[];
 }
 
 export interface Subject {
@@ -162,4 +168,7 @@ export interface Subscription {
   active: boolean;
   creditsRemaining: number;
   currentPeriodEnd: number | null;
+  /** True when the user has cancelled but plan is still running until
+   * `currentPeriodEnd`. After that they drop back to Starter. */
+  cancelAtPeriodEnd: boolean;
 }

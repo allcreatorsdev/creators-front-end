@@ -27,14 +27,23 @@ export type FeedQuery = {
   pageSize?: number;
 };
 
-export function useFeed(query: FeedQuery) {
+export function useFeed(
+  query: FeedQuery,
+  opts: { pollWhile?: boolean } = {},
+) {
   return useQuery({
     queryKey: qk.feed(query),
     queryFn: () =>
       api<FeedPage>("/videos", {
         query: query as Record<string, string | number | boolean | undefined>,
       }),
+    // Keep the previous results visible while a new request is in flight —
+    // filter tweaks should not blank the grid.
     placeholderData: (prev) => prev,
+    // While the workspace is still being provisioned (or a channel is
+    // scraping in the background) poll so freshly-stored videos appear
+    // without a manual refresh.
+    refetchInterval: opts.pollWhile ? 3000 : false,
   });
 }
 

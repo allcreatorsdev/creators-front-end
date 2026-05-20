@@ -13,6 +13,13 @@ export function setAuthToken(token: string | null): void {
   authToken = token;
 }
 
+/** Headers needed to authenticate against the backend. Exposed so other
+ * fetch callers (e.g. the streaming feed hook) reuse the same token state
+ * as the standard `api()` helper. */
+export function authHeaders(): Record<string, string> {
+  return authToken ? { Authorization: `Bearer ${authToken}` } : {};
+}
+
 export class ApiError extends Error {
   constructor(
     public status: number,

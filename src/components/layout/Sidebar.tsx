@@ -153,7 +153,7 @@ export function Sidebar() {
             me
               ? me.workspace.planTier.charAt(0).toUpperCase() +
                 me.workspace.planTier.slice(1)
-              : "Starter"
+              : null
           }
         />
         <button
