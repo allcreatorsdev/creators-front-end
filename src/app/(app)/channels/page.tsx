@@ -167,9 +167,13 @@ export default function ChannelsPage() {
               </Button>
             </div>
             <p className="text-xs text-faint">
-              AI suggests real creators grouped by theme — fast (~3s). Click
-              Add (or “Add all”) to pull a channel&apos;s real videos into
-              your feed.
+              AI suggests creators grouped by theme — fast (~3s). Click Add
+              (or &ldquo;Add all&rdquo;) to pull a channel&apos;s real
+              videos into your feed. Note: follower counts are AI
+              estimates and a handle may not always exist — if you see
+              &ldquo;No videos found&rdquo; after adding, the handle is
+              wrong; try the &ldquo;Add by URL&rdquo; tab instead with a
+              link to a real video.
             </p>
 
             {describe.isPending ? (
