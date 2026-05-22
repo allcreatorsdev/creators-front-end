@@ -9,6 +9,7 @@ import { Input, Label, Select } from "@/components/ui/Field";
 import { cn } from "@/lib/utils/cn";
 import type { Channel, SavedFilter } from "@/lib/api/types";
 import type { FeedQuery } from "../hooks";
+import { ChannelSelect } from "./ChannelSelect";
 
 type Unit = "days" | "weeks" | "months" | "years";
 const UNIT_DAYS: Record<Unit, number> = {
@@ -197,17 +198,11 @@ export function FilterPanel({
 
       <div className="space-y-1">
         <Label>Channels</Label>
-        <Select
-          value={filters.channelId ?? ""}
-          onChange={(e) => set({ channelId: e.target.value || undefined })}
-        >
-          <option value="">All channels</option>
-          {channels?.map((c) => (
-            <option key={c.id} value={c.id}>
-              {c.displayName}
-            </option>
-          ))}
-        </Select>
+        <ChannelSelect
+          channels={channels}
+          value={filters.channelId}
+          onChange={(id) => set({ channelId: id })}
+        />
       </div>
 
       <div className="space-y-1">

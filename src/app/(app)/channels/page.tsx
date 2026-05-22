@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/Button";
 import { Spinner } from "@/components/ui/Spinner";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { PlatformIcon } from "@/components/ui/PlatformIcon";
+import { ChannelAvatar } from "@/components/ui/ChannelAvatar";
 import { cn } from "@/lib/utils/cn";
 import { compactNumber } from "@/lib/utils/format";
 import {
@@ -209,6 +210,7 @@ export default function ChannelsPage() {
                               addChannel.mutate({
                                 platform: c.platform,
                                 handle: c.handle,
+                                displayName: c.displayName,
                               });
                           })
                         }
@@ -249,6 +251,7 @@ export default function ChannelsPage() {
                                 addChannel.mutate({
                                   platform: c.platform,
                                   handle: c.handle,
+                                  displayName: c.displayName,
                                 })
                               }
                             >
@@ -324,12 +327,8 @@ export default function ChannelsPage() {
         <div className="mt-4 space-y-3">
           {channels.map((c) => (
             <div key={c.id} className="flex items-center gap-3">
-              <div
-                className={cn(
-                  "relative size-9 shrink-0 rounded-full",
-                  `grad-${c.avatarGradient}`,
-                )}
-              >
+              <div className="relative shrink-0">
+                <ChannelAvatar channel={c} size={36} />
                 <PlatformIcon
                   platform={c.platform}
                   size={12}
@@ -340,9 +339,11 @@ export default function ChannelsPage() {
               <div className="min-w-0 flex-1">
                 <p className="truncate text-sm font-medium">{c.handle}</p>
                 {c.scraping ? (
-                  <p className="flex items-center gap-1 text-xs text-brand">
+                  // Spinner is a <div>, so this row must be a <div> too —
+                  // <p> can't legally contain block elements (React warns).
+                  <div className="flex items-center gap-1 text-xs text-brand">
                     <Spinner className="size-3" /> Fetching videos…
-                  </p>
+                  </div>
                 ) : c.followers === 0 && c.totalViews === 0 ? (
                   <p className="text-xs text-red-600">
                     ⚠ No videos found — check the @handle
@@ -354,13 +355,22 @@ export default function ChannelsPage() {
                   </p>
                 )}
               </div>
-              <button
-                onClick={() => removeChannel.mutate(c.id)}
-                className="text-faint hover:text-red-600"
-                aria-label="Remove"
-              >
-                ✕
-              </button>
+              {/* Per-row loading state — the parent mutation's
+                  `variables` holds the most-recent argument, so we can
+                  tell which channel is currently being removed and
+                  swap the X for a spinner just on that row. */}
+              {removeChannel.isPending && removeChannel.variables === c.id ? (
+                <Spinner className="size-4" />
+              ) : (
+                <button
+                  onClick={() => removeChannel.mutate(c.id)}
+                  disabled={removeChannel.isPending}
+                  className="text-faint hover:text-red-600 disabled:opacity-50"
+                  aria-label="Remove"
+                >
+                  ✕
+                </button>
+              )}
             </div>
           ))}
           {channels.length === 0 && (

@@ -9,6 +9,11 @@ const tones = {
   violet: "bg-[#ede9fe] text-[#6d28d9]",
   gray: "bg-nav-active text-muted",
   brand: "bg-version-bg text-version-fg",
+  // Below-average outlier (<1x) — red pastel + crimson text, matches the
+  // Sandcastle reference where underperforming videos get a warning tint.
+  red: "bg-[#fee2e2] text-[#b91c1c]",
+  // Engagement — peach/orange pastel + amber text.
+  orange: "bg-[#ffedd5] text-[#c2410c]",
 } as const;
 
 export type BadgeTone = keyof typeof tones;

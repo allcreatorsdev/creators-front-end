@@ -34,9 +34,12 @@ export default function FeedPage() {
   const [filters, setFilters] = useState<FeedQuery>(DEFAULTS);
   const [showFilters, setShowFilters] = useState(true);
   const [selected, setSelected] = useState<Video | null>(null);
-  // Set of video IDs the user has selected for bulk operations. Empty by
-  // default; checkboxes only become visible on hover, so the default view
-  // is unchanged for users who never bulk-analyze.
+  // Bulk-analyze flow: user clicks the always-visible "Bulk Analyze"
+  // button in the top bar to enter select mode, which surfaces a
+  // checkbox on every card. The "Analyze N" + "Cancel" buttons then
+  // replace the entry button until the user commits or aborts.
+  const [selectMode, setSelectMode] = useState(false);
+  // Set of video IDs the user has selected for bulk operations.
   const [picked, setPicked] = useState<Set<string>>(new Set());
   // Progress counter shown on the Bulk Analyze button while it iterates.
   const [bulkProgress, setBulkProgress] = useState<{
@@ -130,6 +133,12 @@ export default function FeedPage() {
     }
     setBulkProgress(null);
     setPicked(new Set());
+    setSelectMode(false);
+  };
+
+  const cancelSelectMode = (): void => {
+    setPicked(new Set());
+    setSelectMode(false);
   };
 
   // Counts shown on the bulk action button. Already-analyzed videos in
@@ -181,32 +190,45 @@ export default function FeedPage() {
           >
             {addUrl.isPending ? "Adding…" : "🔗 Add video URL"}
           </button>
-          {/* Bulk Analyze — visible when at least one card is selected.
-              Disabled when no analyzable videos in the selection (e.g.
-              all are already analyzed). */}
-          {picked.size > 0 && (
+          {/* Bulk Analyze entry — always visible. Clicking it enters
+              select mode (checkboxes appear on each card). Once at
+              least one card is picked, the Analyze + Cancel buttons
+              below take over the toolbar slot. */}
+          {!selectMode && (
             <button
-              onClick={runBulkAnalyze}
-              disabled={pickedAnalyzable === 0 || bulkProgress !== null}
-              className="inline-flex items-center gap-1.5 rounded-md bg-brand px-3 py-1 text-xs font-medium text-white hover:bg-brand-hover disabled:opacity-50"
+              onClick={() => setSelectMode(true)}
+              className="inline-flex items-center gap-1.5 hover:text-text"
             >
-              {bulkProgress ? (
-                <>
-                  <Spinner className="size-3" />
-                  Analyzing {bulkProgress.done}/{bulkProgress.total}…
-                </>
-              ) : (
-                <>⚡ Bulk Analyze ({pickedAnalyzable})</>
-              )}
+              ⚡ Bulk Analyze
             </button>
           )}
-          {picked.size > 0 && !bulkProgress && (
-            <button
-              onClick={() => setPicked(new Set())}
-              className="text-xs text-faint hover:text-text"
-            >
-              Clear selection
-            </button>
+          {selectMode && (
+            <>
+              <button
+                onClick={runBulkAnalyze}
+                disabled={pickedAnalyzable === 0 || bulkProgress !== null}
+                className="inline-flex items-center gap-1.5 rounded-md bg-brand px-3 py-1 text-xs font-medium text-white hover:bg-brand-hover disabled:opacity-50"
+              >
+                {bulkProgress ? (
+                  <>
+                    <Spinner className="size-3" />
+                    Analyzing {bulkProgress.done}/{bulkProgress.total}…
+                  </>
+                ) : pickedAnalyzable === 0 ? (
+                  <>Select videos to analyze</>
+                ) : (
+                  <>⚡ Analyze {pickedAnalyzable} selected</>
+                )}
+              </button>
+              {!bulkProgress && (
+                <button
+                  onClick={cancelSelectMode}
+                  className="text-xs text-faint hover:text-text"
+                >
+                  Cancel
+                </button>
+              )}
+            </>
           )}
         </div>
         <div className="flex items-center gap-3">
@@ -292,6 +314,7 @@ export default function FeedPage() {
                     video={v}
                     onOpen={setSelected}
                     onPatch={patchItem}
+                    selectMode={selectMode}
                     selected={picked.has(v.id)}
                     onToggleSelect={togglePick}
                   />

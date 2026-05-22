@@ -28,8 +28,15 @@ function useChannelInvalidator() {
 export function useAddChannel() {
   const invalidate = useChannelInvalidator();
   return useMutation({
-    mutationFn: (body: { platform: string; handle: string }) =>
-      api<Channel>("/channels", { method: "POST", body }),
+    // `displayName` is optional — passed from discovery suggestions so the
+    // backend can use it as a smarter fallback search query when the
+    // AI-supplied handle doesn't resolve directly. Manual Add-by-URL
+    // skips it.
+    mutationFn: (body: {
+      platform: string;
+      handle: string;
+      displayName?: string;
+    }) => api<Channel>("/channels", { method: "POST", body }),
     onSuccess: invalidate,
   });
 }

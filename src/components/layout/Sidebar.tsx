@@ -87,7 +87,7 @@ export function Sidebar() {
         { href: "/feed", label: "Feed", icon: FeedIcon },
         {
           href: "/saved",
-          label: "Saved",
+          label: "Video saved",
           icon: SavedIcon,
           badge: saved?.length ?? 0,
         },
