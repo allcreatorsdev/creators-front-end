@@ -108,10 +108,10 @@ export default function ChannelsPage() {
   };
 
   return (
-    <div className="flex gap-6">
+    <div className="flex flex-col gap-6 lg:flex-row">
       <div className="min-w-0 flex-1 space-y-5">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Channels</h1>
+          <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">Channels</h1>
           <p className="text-sm text-muted">
             Pick which channels to include in your feed
           </p>
@@ -313,7 +313,7 @@ export default function ChannelsPage() {
         )}
       </div>
 
-      <Card className="h-fit w-80 shrink-0 p-4">
+      <Card className="h-fit w-full shrink-0 p-4 lg:w-80">
         <div className="flex items-center justify-between">
           <div>
             <h2 className="font-semibold">Your Watchlist</h2>

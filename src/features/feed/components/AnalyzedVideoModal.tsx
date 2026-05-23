@@ -66,7 +66,7 @@ export function AnalyzedVideoModal({
 
       {a ? (
         <>
-          <div className="flex gap-1 border-b border-border px-5">
+          <div className="flex gap-1 overflow-x-auto border-b border-border px-5">
             {TABS.map((t) => (
               <button
                 key={t}

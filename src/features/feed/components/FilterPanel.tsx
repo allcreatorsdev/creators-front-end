@@ -89,10 +89,14 @@ function Range({
   label: string;
   a: number | undefined;
   b: number | undefined;
-  onA: (v: number) => void;
-  onB: (v: number) => void;
+  onA: (v: number | undefined) => void;
+  onB: (v: number | undefined) => void;
   suffix?: string;
 }) {
+  // Empty string → undefined (not 0). Number("") is 0, so wrapping naively
+  // would refuse to let the user clear a "0" — it'd snap straight back.
+  const parse = (s: string): number | undefined =>
+    s === "" ? undefined : Number(s);
   return (
     <div className="space-y-1">
       <Label>{label}</Label>
@@ -100,14 +104,14 @@ function Range({
         <Input
           type="number"
           value={a ?? ""}
-          onChange={(e) => onA(Number(e.target.value))}
+          onChange={(e) => onA(parse(e.target.value))}
           className="py-1.5"
         />
         <span className="text-faint">–</span>
         <Input
           type="number"
           value={b ?? ""}
-          onChange={(e) => onB(Number(e.target.value))}
+          onChange={(e) => onB(parse(e.target.value))}
           className="py-1.5"
         />
         {suffix && <span className="text-xs text-faint">{suffix}</span>}
@@ -153,7 +157,7 @@ export function FilterPanel({
     setFilters({ ...filters, ...patch, page: 1 });
 
   return (
-    <Card className="w-72 shrink-0 space-y-5 p-4">
+    <Card className="w-full shrink-0 space-y-5 rounded-none border-0 p-4 lg:w-72 lg:rounded-xl lg:border">
       <div>
         <Label>Saved Filters</Label>
         <div className="mt-2 space-y-1">

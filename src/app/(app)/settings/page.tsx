@@ -48,7 +48,7 @@ export default function SettingsPage() {
   return (
     <div className="space-y-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-3xl font-bold tracking-tight">Settings</h1>
+        <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">Settings</h1>
         {profile ? (
           <Badge tone="brand">App Version {profile.appVersion}</Badge>
         ) : (
@@ -73,14 +73,16 @@ export default function SettingsPage() {
         </button>
       </div>
 
-      <div className="flex gap-8">
-        <nav className="w-48 shrink-0 space-y-1">
+      <div className="flex flex-col gap-4 lg:flex-row lg:gap-8">
+        {/* On mobile this becomes a horizontal scroll strip of pills so all
+            tabs stay reachable without consuming a full screen of height. */}
+        <nav className="-mx-1 flex shrink-0 gap-1 overflow-x-auto px-1 lg:mx-0 lg:w-48 lg:flex-col lg:space-y-1 lg:overflow-visible lg:px-0">
           {NAV.map((n) => (
             <button
               key={n}
               onClick={() => setNav(n)}
               className={cn(
-                "flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium",
+                "shrink-0 whitespace-nowrap rounded-lg px-3 py-2 text-sm font-medium lg:w-full lg:text-left",
                 nav === n
                   ? "bg-nav-active text-text"
                   : "text-muted hover:bg-nav-active hover:text-text",

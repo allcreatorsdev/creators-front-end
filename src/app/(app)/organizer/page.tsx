@@ -73,7 +73,7 @@ export default function OrganizerPage() {
     <div className="space-y-5">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Organizer</h1>
+          <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">Organizer</h1>
           <p className="text-sm text-muted">
             Content production pipeline grouped by your subjects
           </p>

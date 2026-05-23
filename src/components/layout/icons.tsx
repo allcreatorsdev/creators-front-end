@@ -58,3 +58,21 @@ export const LogoutIcon = (p: P) => (
     <path d="M15 4h3a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-3M10 17l-5-5 5-5M5 12h12" />
   </svg>
 );
+
+export const MenuIcon = (p: P) => (
+  <svg {...base(p)}>
+    <path d="M4 6h16M4 12h16M4 18h16" />
+  </svg>
+);
+
+export const CloseIcon = (p: P) => (
+  <svg {...base(p)}>
+    <path d="M6 6l12 12M18 6L6 18" />
+  </svg>
+);
+
+export const FilterIcon = (p: P) => (
+  <svg {...base(p)}>
+    <path d="M3 5h18M6 12h12M10 19h4" />
+  </svg>
+);

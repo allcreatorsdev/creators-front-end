@@ -60,8 +60,8 @@ function Property({
   children: React.ReactNode;
 }) {
   return (
-    <div className="flex items-center gap-3 py-1.5">
-      <div className="flex w-44 shrink-0 items-center gap-2 text-sm text-muted">
+    <div className="flex flex-col gap-1 py-1.5 sm:flex-row sm:items-center sm:gap-3">
+      <div className="flex shrink-0 items-center gap-2 text-sm text-muted sm:w-44">
         <span className="w-4 text-center text-base">{icon}</span>
         <span>{label}</span>
       </div>

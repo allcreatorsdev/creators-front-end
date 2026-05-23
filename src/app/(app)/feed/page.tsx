@@ -32,7 +32,10 @@ const DEFAULTS: FeedQuery = {
 
 export default function FeedPage() {
   const [filters, setFilters] = useState<FeedQuery>(DEFAULTS);
-  const [showFilters, setShowFilters] = useState(true);
+  // Filter panel: shown inline on desktop (lg+), drawer-style on mobile.
+  // Default to *closed* on mobile so the feed doesn't open behind a panel,
+  // but the inline panel still renders for desktop via the `lg:block` gate.
+  const [showFilters, setShowFilters] = useState(false);
   const [selected, setSelected] = useState<Video | null>(null);
   // Bulk-analyze flow: user clicks the always-visible "Bulk Analyze"
   // button in the top bar to enter select mode, which surfaces a
@@ -232,9 +235,12 @@ export default function FeedPage() {
           )}
         </div>
         <div className="flex items-center gap-3">
+          {/* Mobile-only Filters toggle. On lg+ the rail is always
+              visible to the left of the grid, so this button would be
+              redundant. */}
           <button
             onClick={() => setShowFilters((v) => !v)}
-            className="rounded-lg border border-border px-3 py-1.5 text-sm font-medium hover:bg-nav-active"
+            className="rounded-lg border border-border px-3 py-1.5 text-sm font-medium hover:bg-nav-active lg:hidden"
           >
             ▾ Filters
           </button>
@@ -254,8 +260,34 @@ export default function FeedPage() {
       </div>
 
       <div className="flex gap-6">
-        {showFilters && (
+        {/* Desktop: inline filter rail. Hidden on mobile — the same panel
+            is rendered below as an overlay drawer when `showFilters` is on. */}
+        <div className="hidden lg:block">
           <FilterPanel filters={filters} setFilters={setFilters} />
+        </div>
+        {/* Mobile filter drawer — only mounts when toggled, slides from
+            left over the feed. Drawer is a hard-pinned full-height panel
+            so a long filter list scrolls within the drawer, not the page. */}
+        {showFilters && (
+          <div className="fixed inset-0 z-40 flex lg:hidden">
+            <div
+              className="absolute inset-0 bg-black/40"
+              onClick={() => setShowFilters(false)}
+              aria-hidden
+            />
+            <div className="relative z-10 flex h-dvh w-80 max-w-[90vw] flex-col overflow-y-auto bg-bg">
+              <div className="flex items-center justify-between border-b border-border px-4 py-3">
+                <span className="text-sm font-semibold">Filters</span>
+                <button
+                  onClick={() => setShowFilters(false)}
+                  className="rounded-md px-2 py-1 text-sm text-muted hover:bg-nav-active"
+                >
+                  Close
+                </button>
+              </div>
+              <FilterPanel filters={filters} setFilters={setFilters} />
+            </div>
+          </div>
         )}
 
         <div className="min-w-0 flex-1">
